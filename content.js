@@ -68,6 +68,33 @@ let lastTranslationBoxPosition = {
     positionSet: false
 };
 
+// 마지막 번역 내용을 복원하기 위한 저장소
+let lastTranslationData = { translation: null, originalText: null };
+// 선택 번역 중복 실행 방지 플래그
+let isSelectionTranslating = false;
+
+// Cmd+Shift+E (또는 Ctrl+Shift+E) 단축키:
+// 1) 텍스트 선택이 있으면 즉시 선택 번역 수행
+// 2) 선택이 없고 이전 번역이 사라진 상태면 마지막 번역 박스 복원
+document.addEventListener('keydown', (e) => {
+    // macOS: metaKey (⌘) + Shift + E, 기타 OS: Ctrl + Shift + E
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.shiftKey && (e.key === 'e' || e.key === 'E')) {
+        const sel = window.getSelection();
+        const selected = sel ? sel.toString().trim() : '';
+        if (selected) {
+            if (!isSelectionTranslating) {
+                performSelectionTranslation(selected, { invokedByHotkey: true });
+            }
+        } else {
+            if (!document.getElementById('translation-box') && lastTranslationData.translation) {
+                // 박스가 닫혀 있고 저장된 최근 번역 존재 -> 복원
+                displayTranslation(lastTranslationData.translation, lastTranslationData.originalText);
+            }
+        }
+        e.preventDefault();
+    }
+}, true);
+
 // Track mouse down state
 document.addEventListener('mousedown', function(event) {
     // Don't remove the button if clicking on it
@@ -192,21 +219,30 @@ function showTranslationButton(event, selectedText) {
 }
 
 // Function to perform translation of selected text
-async function performSelectionTranslation(selectedText) {
-    if (selectedText) {
+async function performSelectionTranslation(selectedText, opts = {}) {
+    if (!selectedText || isSelectionTranslating) return;
+    isSelectionTranslating = true;
+    try {
         showLoadingIndicator();
-        let translation = await translateText(selectedText);
+        const translation = await translateText(selectedText);
         hideLoadingIndicator();
-                if (translation) {
-                    displayTranslation(translation, selectedText);
-                } else {
-                    alert('Translation failed.');
+        if (translation) {
+            displayTranslation(translation, selectedText);
+        } else {
+            alert('Translation failed.');
         }
+    } finally {
+        isSelectionTranslating = false;
     }
 }
 
 // Function to display translation in a new box
 function displayTranslation(translation, originalText = null) {
+    // 최근 번역 저장 (복원 기능용)
+    if (translation) {
+        lastTranslationData.translation = translation;
+        lastTranslationData.originalText = originalText;
+    }
     // Check if there's already a translation box
     const existingBox = document.getElementById('translation-box');
     
