@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTranslator Settings</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            direction: ltr;
+            text-align: left;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f8fa;
+            min-width: 300px;
+        }
+        h3 {
+            background-color: #01afbe;
+            color: #fff;
+            margin: 0;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .container {
+            background-color: #fff;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin: 15px;
+            padding: 20px;
+        }
+        p {
+            margin: 10px 0 20px 0;
+            font-size: 14px;
+            color: #444;
+        }
+        .language-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        label:hover {
+            background-color: #e0fafd;
+        }
+        input[type="checkbox"] {
+            margin-left: 8px;
+            width: 16px;
+            height: 16px;
+            accent-color: #01afbe;
+        }
+        .api-section label {
+            display: block;
+            margin-bottom: 8px;
+            color: #444;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            font-size: 14px;
+            direction: ltr;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #01afbe;
+        }
+        button {
+            display: block;
+            width: 100%;
+            margin: 20px auto 10px auto;
+            padding: 12px;
+            font-size: 14px;
+            background-color: #01afbe;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            font-family: Tahoma, Geneva, Verdana, sans-serif;
+        }
+        button:hover {
+            background-color: #5c7b00;
+        }
+        #status {
+            text-align: center;
+            color: #01afbe;
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #e0fafd;
+            border-radius: 4px;
+        }
+        .feature-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .feature-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        
+        .feature-description {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.5;
+        }
+        
+        .new-badge {
+            display: inline-block;
+            background-color: #ff6b6b;
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-right: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h3>web-translate-with-gemini-api 설정</h3>
+    
+    <div class="container">
+        <!-- Screenshot buttons side by side -->
+        <div style="display: flex; gap: 10px; margin-bottom: 8px; margin-top: 0; padding: 6px 0;">
+    <button id="screenshot-full" style="flex:1; background-color: #1976d2; color: white; border: none; padding: 12px; margin: 0px auto 10px auto; border-radius: 4px; cursor: pointer; font-weight: bold;">전체 페이지 캡처 & 번역</button>
+    <button id="screenshot-area" style="flex:1; background-color: #388e3c; color: white; border: none; padding: 12px; margin: 0px auto 10px auto; border-radius: 4px; cursor: pointer; font-weight: bold;">영역 지정 캡처 & 번역</button>
+</div>
+    <p>Gemini API Key를 입력하고 기본 번역 대상 언어를 선택하세요. 원하는 경우 번역 프롬프트를 수정할 수 있습니다.</p>
+        
+    <label for="api-key">Gemini API Key:</label>
+        <input type="text" id="api-key" style="width: 100%; padding: 8px; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+    <p style="font-size: 12px; color: #555; margin-bottom: 15px;"><a href="https://console.cloud.google.com/apis/credentials?createKeyType=API_KEY" target="_blank" rel="noopener">Gemini API Key 생성 링크</a></p>
+        
+    <label for="target-language">번역 대상 언어:</label>
+        <select id="target-language" style="width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+            <option value="Korean">Korean</option>
+            <option value="English">English</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="German">German</option>
+            <option value="Chinese">Chinese</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Russian">Russian</option>
+            <option value="Arabic">Arabic</option>
+            <option value="Italian">Italian</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Persian">Persian</option>
+        </select>
+        <label for="exclude-lang" style="margin-bottom:10px;display:block;font-size:14px;">다음 언어 트윗에는 번역 버튼 숨기기:</label>
+        <select id="exclude-lang" style="width:100%;padding:8px;margin-bottom:15px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">
+            <option value="">-- None --</option>
+            <option value="ko">Korean</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="zh">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="ru">Russian</option>
+            <option value="ar">Arabic</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="fa">Persian</option>
+        </select>
+        
+    <label for="translation-prompt">번역 프롬프트:</label>
+        <textarea id="translation-prompt" style="width: 100%; height: 150px; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px; resize: vertical;"></textarea>
+    <p style="font-size: 12px; color: #666;"><code>&lt;TEXT&gt;</code> 는 번역할 원문, <code>&lt;LANGUAGE&gt;</code> 는 대상 언어 자리표시자입니다.</p>
+        
+    <div id="status" style="display: none; text-align: center; margin-top: 10px; padding: 8px; background-color: #e8f5e9; color: #2e7d32; border-radius: 4px;">저장되었습니다!</div>
+
+    <button id="save-settings" style="background-color: #01afbe; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 18px;">설정 저장</button>
+
+    </div>
+    
+    <script src="defaults.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
