@@ -71,4 +71,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // In-place full page translation
+    const inplaceBtn = document.getElementById('inplace-translate');
+    if (inplaceBtn) {
+        inplaceBtn.addEventListener('click', () => {
+            chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+                if (tabs[0]?.id) {
+                    chrome.tabs.sendMessage(tabs[0].id, { action: 'inplace_full_page_translate' });
+                }
+            });
+        });
+    }
 });
