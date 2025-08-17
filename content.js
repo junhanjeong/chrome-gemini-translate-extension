@@ -1541,7 +1541,7 @@ let inplaceTranslationState = {
     processedNodes: null // WeakSet 저장 (초기/백필 구분)
 };
 // 화면 내 + 추가로 아래쪽 일부만 번역하기 위한 배수 (필요시 조정 가능)
-const INPLACE_MAX_VIEWPORT_MULTIPLIER = 8; // 뷰포트 높이의 8배 지점까지 (사용자 설정)
+const INPLACE_MAX_VIEWPORT_MULTIPLIER = 16; // 뷰포트 높이의 8배 지점까지 (사용자 설정)
 const INPLACE_TOP_BUFFER = 150; // 뷰포트 위로 이 정도까지는 포함 (스크롤로 살짝 올린 영역)
 // 텍스트 노드 1개 == 1 API 호출 (사용자 요구). 과도한 비용/429 방지를 위해 안전 동시성 제한 적용.
 const CONCURRENCY_LIMIT = 60; // 안전한 기본 동시성 (이 값을 올려도 내부 가드 적용)
@@ -1585,11 +1585,6 @@ async function toggleInplaceFullPageTranslation() {
         const lowerLimitPx = window.innerHeight * INPLACE_MAX_VIEWPORT_MULTIPLIER; // 아래 한계
     const textNodeSet = new Set();
     const textNodes = [];
-    // Reddit 은 먼저 canonical 컨테이너에서 수집(중복 감소)
-    if (isRedditSite()) {
-        const redditCanon = collectCanonicalRedditTextNodes(new WeakSet());
-        redditCanon.forEach(n=>{ if(!textNodeSet.has(n)){ textNodeSet.add(n); textNodes.push(n);} });
-    }
         for (const root of roots) {
             if (!root) continue;
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -1667,25 +1662,7 @@ async function toggleInplaceFullPageTranslation() {
         }
         let groups = [];
         if (isRedditSite()) {
-            // Reddit: canonical 컨테이너 단위 1그룹씩만 (과다 그룹/호출 감소)
-            const containerSelectors = '[data-test-id="post-content"], [data-testid="post-container"], shreddit-post, shreddit-comment, [data-test-id="comment"], [data-testid="comment"]';
-            const containers = Array.from(new Set(Array.from(document.querySelectorAll(containerSelectors))));
-            let orderSeq = 0;
-            containers.forEach(c=>{
-                // 사이드바/광고 제외
-                if (c.closest('aside,[role="complementary"], nav')) return;
-                const walker = document.createTreeWalker(c, NodeFilter.SHOW_TEXT, null);
-                const nodes=[];
-                while (walker.nextNode()) {
-                    const n=walker.currentNode; if(!n.nodeValue) continue; const t=n.nodeValue.trim(); if(t.length<2) continue; if (processedNodeSet.has(n)) continue;
-                    // 코드/버튼 등 제외
-                    const pe=n.parentElement; if(!pe) continue; if(pe.closest('code,pre,script,style,button,textarea,input')) continue;
-                    nodes.push(n);
-                }
-                if(!nodes.length) return;
-                groups.push({nodes, order: orderSeq++});
-            });
-            groups.sort((a,b)=>a.order-b.order);
+            groups = buildRedditGroups(processedNodeSet, 'initial');
         } else {
             const groupMap = new Map(); // containerEl -> {nodes:[], order:index}
             let orderSeq = 0;
@@ -1864,6 +1841,80 @@ function isRedditSite() {
     return /(^|\.)reddit\.com$/.test(window.location.hostname);
 }
 
+// Reddit: 메인 게시글 본문 1개 + 각 댓글 본문 1개씩만 그룹 생성
+// - 불필요한 메타(작성자, 점수, 시간, 버튼, 플레어, 투표 영역) 제외
+// - 본문 내 여러 text node는 마커 분배 위해 하나의 그룹으로 묶되 너무 긴 경우 길이 기준으로 세분화
+// mode: 'initial' | 'incremental' (incremental 은 viewport 근처만 필터 가능 향후 확장 포인트)
+function buildRedditGroups(processedSet, mode='initial') {
+    const groups = [];
+    if (!isRedditSite()) return groups;
+    const MARKER_LIMIT = 12000; // 한 그룹 텍스트 길이 제한 (너무 길면 split)
+
+    // 1. 메인 포스트 컨테이너 (최초 1개) 우선
+    const postRoot = document.querySelector('[data-test-id="post-content"], [data-testid="post-container"], shreddit-post');
+    if (postRoot && !postRoot.closest('aside,[role="complementary"], nav')) {
+        const postBodyNodes = collectRedditBodyTextNodes(postRoot, processedSet);
+        pushChunkedGroup(postBodyNodes, groups, MARKER_LIMIT);
+    }
+    // 2. 댓글 컨테이너들
+    const commentRoots = Array.from(document.querySelectorAll('shreddit-comment, [data-test-id="comment"], [data-testid="comment"]'));
+    for (const c of commentRoots) {
+        if (!c.isConnected) continue;
+        if (c.closest('aside,[role="complementary"], nav')) continue;
+        const commentBodyNodes = collectRedditBodyTextNodes(c, processedSet);
+        if (!commentBodyNodes.length) continue;
+        pushChunkedGroup(commentBodyNodes, groups, MARKER_LIMIT);
+    }
+    // order 부여
+    return groups.map((g,idx)=>({nodes:g, order:idx}));
+}
+
+// Reddit 본문/댓글 내부에서 실제 표시 텍스트 노드만 추출
+function collectRedditBodyTextNodes(root, processedSet){
+    const result = [];
+    // 후보: markdown/리치텍스트 영역 - Reddit 은 div[piece], p, h*, li 등이 섞여있음
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node){
+            if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
+            if (processedSet.has(node)) return NodeFilter.FILTER_REJECT;
+            const txt = node.nodeValue.replace(/\s+/g,' ').trim();
+            if (txt.length < 2) return NodeFilter.FILTER_REJECT;
+            const pe = node.parentElement; if(!pe) return NodeFilter.FILTER_REJECT;
+            // 제외 요소
+            if (pe.closest('code, pre, textarea, input, button, style, script')) return NodeFilter.FILTER_REJECT;
+            if (pe.matches('a[role="button"], span[role="button"], [data-click-id="user"], [data-click-id="timestamp"], [data-click-id="score"], [data-test-id="post-content-flair"]')) return NodeFilter.FILTER_REJECT;
+            if (pe.closest('[data-testid="comment-author"], header, footer')) return NodeFilter.FILTER_REJECT;
+            // 투표/액션바
+            if (pe.closest('[data-testid="post-container"] [id^="vote-arrows"], [id^="vote-arrows"], [data-testid="comment"] [id^="vote-arrows"], [role="toolbar"], [data-testid="comment-action-bar"]')) return NodeFilter.FILTER_REJECT;
+            // 숨김/사이즈 0 (단 collapsible 내부는 제외) -> geometry 확인
+            try {
+                const range = document.createRange(); range.selectNodeContents(node);
+                const rect = range.getBoundingClientRect();
+                if (rect.width === 0 && rect.height === 0) return NodeFilter.FILTER_REJECT;
+            } catch {}
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+    while (walker.nextNode()) result.push(walker.currentNode);
+    // 연속 공백 정리 (nodeValue 조정은 번역 시점에, 여기선 그대로)
+    return result;
+}
+
+function pushChunkedGroup(nodes, groups, limit){
+    if (!nodes.length) return;
+    let acc = [];
+    let accLen = 0;
+    for (const n of nodes){
+        const t = n.nodeValue || '';
+        if (accLen + t.length > limit && acc.length){
+            groups.push(acc);
+            acc = []; accLen = 0;
+        }
+        acc.push(n); accLen += t.length;
+    }
+    if (acc.length) groups.push(acc);
+}
+
 // Reddit 본문/댓글 컨테이너에서 중복 없이 핵심 텍스트 노드만 수집 (트위터 방식 유사)
 function collectCanonicalRedditTextNodes(processedNodeSet) {
     if (!isRedditSite()) return [];
@@ -2034,21 +2085,7 @@ async function translateMoreVisibleNodes() {
     }
     let groups = [];
     if (isRedditSite()) {
-        const containerSelectors = '[data-test-id="post-content"], [data-testid="post-container"], shreddit-post, shreddit-comment, [data-test-id="comment"], [data-testid="comment"]';
-        const containers = Array.from(new Set(Array.from(document.querySelectorAll(containerSelectors))));
-        let seq = 0;
-        containers.forEach(c=>{
-            if (c.closest('aside,[role="complementary"], nav')) return;
-            const walker = document.createTreeWalker(c, NodeFilter.SHOW_TEXT, null);
-            const nodes=[];
-            while (walker.nextNode()) {
-                const n=walker.currentNode; if(!n.nodeValue) continue; const t=n.nodeValue.trim(); if(t.length<2) continue; if (processed.has(n)) continue;
-                const pe=n.parentElement; if(!pe) continue; if(pe.closest('code,pre,script,style,button,textarea,input')) continue;
-                nodes.push(n);
-            }
-            if(!nodes.length) return; groups.push({nodes, order: seq++});
-        });
-        groups.sort((a,b)=>a.order-b.order);
+        groups = buildRedditGroups(processed, 'incremental');
     } else {
         const groupMap = new Map();
         let seq = 0;
